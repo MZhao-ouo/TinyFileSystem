@@ -188,5 +188,10 @@ void my_read(int fd, int len) {
 }
 
 void my_exitsys() {
-
+    FILE *fp = fopen("./my_disk", "wb");
+    fwrite(myvhard, SIZE, 1, fp);
+    fclose(fp);
+    free(myvhard);
+    
+    exit(0);
 }

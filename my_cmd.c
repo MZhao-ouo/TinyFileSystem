@@ -8,6 +8,8 @@ void my_format() {
     b0->root = 5;
     b0->startblock = myvhard + BLOCK_SIZE * 5;
 
+    fat *fat1;
+    fat *fat2;
     fat1 = (fat *)(myvhard + BLOCK_SIZE);    // 指向FAT1
     fat2 = (fat *)(myvhard + BLOCK_SIZE * 2);    // 指向FAT2
     for (int i = 0; i < 5; i++) {
@@ -23,8 +25,8 @@ void my_format() {
     int start_fat = allocate_fat(2);
     memset(root, 0, BLOCK_SIZE * 2);
 
-    fill_fcb(&root[0], ".", "", 0, 0, 0, start_fat, BLOCK_SIZE);
-    fill_fcb(&root[1], "..", "", 0, 0, 0, start_fat, BLOCK_SIZE);
+    fill_fcb(&root[0], ".", 0, 0, 0, start_fat, BLOCK_SIZE);
+    fill_fcb(&root[1], "..", 0, 0, 0, start_fat, BLOCK_SIZE);
 
     startp = b0->startblock;  // 指向数据区的起始位置，前面有一个引导块，两个FAT1，两个FAT2
     memset(openfilelist, 0, sizeof(openfilelist));   // 初始化用户打开文件表
@@ -34,7 +36,6 @@ void my_format() {
 }
 
 void my_cd(char *dirname) {
-    printf("cding to %s\n", dirname);
     if (strcmp(dirname, ".") == 0)
         return;
     // cd复合路径
@@ -97,14 +98,21 @@ void my_mkdir(char *dirname) {
         printf("Directory name is too long!\n");
         return;
     }
+    fcb *curdirptr = (fcb *)(myvhard + BLOCK_SIZE * openfilelist[curdir].first);
+    for (int i = 0; i < MAXFCB; i++) {
+        if (curdirptr[i].free == 1 && strcmp(curdirptr[i].filename, dirname) == 0) {
+            printf("Filename exist!\n");
+            return;
+        }
+    }
+
     int start_fat = allocate_fat(1);
     int flag = 0;
     fcb *newdir = (fcb *)(myvhard + BLOCK_SIZE * start_fat);
-    fcb *curdirptr = (fcb *)(myvhard + BLOCK_SIZE * openfilelist[curdir].first);
 
     for (int i = 0; i < MAXFCB; i++) {
         if (curdirptr[i].free == 0) {
-            fill_fcb(&curdirptr[i], dirname, "", 0, 0, 0, start_fat, BLOCK_SIZE);
+            fill_fcb(&curdirptr[i], dirname, 0, 0, 0, start_fat, BLOCK_SIZE);
             flag = 1;
             break;
         }
@@ -116,8 +124,8 @@ void my_mkdir(char *dirname) {
     // 初始化新目录的FCB
     for(int i = 0; i < MAXFCB; i++)
         newdir[i].free = 0;
-    fill_fcb(&newdir[0], ".", "", 0, 0, 0, start_fat, BLOCK_SIZE);
-    fill_fcb(&newdir[1], "..", "", 0, 0, 0, openfilelist[curdir].first, BLOCK_SIZE);
+    fill_fcb(&newdir[0], ".", 0, 0, 0, start_fat, BLOCK_SIZE);
+    fill_fcb(&newdir[1], "..", 0, 0, 0, openfilelist[curdir].first, BLOCK_SIZE);
 }
 
 void my_rmdir(char *dirname) {
@@ -135,8 +143,7 @@ void my_rmdir(char *dirname) {
                     }
                 }
                 curdirptr[i].free = 0;
-                fat1[curdirptr[i].first].id = FREE;
-                fat2[curdirptr[i].first].id = FREE;
+                free_fat(curdirptr[i].first);
             } else {
                 printf("It is not a directory!\n");
             }
@@ -164,7 +171,36 @@ void my_ls() {
 }
 
 void my_create(char *filename) {
+    if (strlen(filename) > 8) {
+        printf("Filename is too long!\n");
+        return;
+    }
     fcb *curdirptr = (fcb *)(myvhard + BLOCK_SIZE * openfilelist[curdir].first);
+    for (int i = 0; i < MAXFCB; i++) {
+        if (curdirptr[i].free == 1 && strcmp(curdirptr[i].filename, filename) == 0) {
+            printf("Filename exist!\n");
+            return;
+        }
+    }
+    int start_fat = allocate_fat(1);
+    int flag = 0;
+    fcb *newblock = (fcb *)(myvhard + BLOCK_SIZE * start_fat);
+
+    int index = 0;
+    for (index = 0; index < MAXFCB; index++) {
+        if (curdirptr[index].free == 0) {
+            fill_fcb(&curdirptr[index], filename, 1, 0, 0, start_fat, BLOCK_SIZE);
+            flag = 1;
+            break;
+        }
+    }
+    if (flag == 0) {
+        printf("Directory is full!\n");
+        return;
+    }
+    memset((void *)newblock, 0, BLOCK_SIZE);
+    fill_useropen(curdir+1, &curdirptr[index], currentdir, 0, 0, 1);
+
 }
 
 void my_rm(char *filename) {
@@ -179,11 +215,19 @@ void my_close(int fd) {
 
 }
 
-void my_write(int fd) {
+int my_write(int fd) {
 
 }
 
-void my_read(int fd, int len) {
+int  do_write(int fd, char* text, int len, char wstyle) {
+
+}
+
+int  my_read(int fd, int len) {
+
+}
+
+int  do_read(int fd, int len, char* text) {
 
 }
 

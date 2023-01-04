@@ -2,7 +2,6 @@
 
 int fill_useropen(int index, fcb *fcbptr, char *dir, int count, char fcbstate, char topenfile) {
     strcpy(openfilelist[index].filename, fcbptr->filename);
-    strcpy(openfilelist[index].exname, fcbptr->exname);
     openfilelist[index].attribute = fcbptr->attribute;
     openfilelist[index].time = fcbptr->time;
     openfilelist[index].date = fcbptr->date;
@@ -17,9 +16,8 @@ int fill_useropen(int index, fcb *fcbptr, char *dir, int count, char fcbstate, c
     return TRUE;
 }
 
-int fill_fcb(fcb *fcbptr, char *filename, char *exname, unsigned char attribute, unsigned short time, unsigned short date, unsigned short first, unsigned long length) {
+int fill_fcb(fcb *fcbptr, char *filename, unsigned char attribute, unsigned short time, unsigned short date, unsigned short first, unsigned long length) {
     strcpy(fcbptr->filename, filename);
-    strcpy(fcbptr->exname, exname);
     fcbptr->attribute = attribute;
     fcbptr->time = time;
     fcbptr->date = date;
@@ -33,6 +31,12 @@ int fill_fcb(fcb *fcbptr, char *filename, char *exname, unsigned char attribute,
 int allocate_fat(int num) {
     int first = -1;
     int last = -1;
+
+    fat *fat1;
+    fat *fat2;
+    fat1 = (fat *)(myvhard + BLOCK_SIZE);    // 指向FAT1
+    fat2 = (fat *)(myvhard + BLOCK_SIZE * 2);    // 指向FAT2
+
     for (int i = 5; i < 1000; i++) {
         if (fat1[i].id == FREE && fat2[i].id == FREE) {
             if (first == -1) {
@@ -53,4 +57,20 @@ int allocate_fat(int num) {
     }
     
     return first;
+}
+
+int free_fat(int index) {
+    fat *fat1;
+    fat *fat2;
+    fat1 = (fat *)(myvhard + BLOCK_SIZE);    // 指向FAT1
+    fat2 = (fat *)(myvhard + BLOCK_SIZE * 2);    // 指向FAT2
+    int next_fat;
+
+    do {
+        next_fat = fat1[index].id;
+        fat1[index].id = FREE;
+        fat2[index].id = FREE;
+    } while (next_fat != END);
+
+    return 1;
 }

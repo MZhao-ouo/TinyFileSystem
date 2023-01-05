@@ -3,8 +3,8 @@
 int fill_useropen(int index, fcb *fcbptr, char *dir, int count, char fcbstate, char topenfile) {
     strcpy(openfilelist[index].filename, fcbptr->filename);
     openfilelist[index].attribute = fcbptr->attribute;
-    openfilelist[index].time = fcbptr->time;
-    openfilelist[index].date = fcbptr->date;
+    openfilelist[index].create_stamp = fcbptr->create_stamp;
+    openfilelist[index].modify_stamp = fcbptr->modify_stamp;
     openfilelist[index].first = fcbptr->first;
     openfilelist[index].length = fcbptr->length;
 
@@ -16,11 +16,11 @@ int fill_useropen(int index, fcb *fcbptr, char *dir, int count, char fcbstate, c
     return TRUE;
 }
 
-int fill_fcb(fcb *fcbptr, char *filename, unsigned char attribute, unsigned short time, unsigned short date, unsigned short first, unsigned long length) {
+int fill_fcb(fcb *fcbptr, char *filename, unsigned char attribute, unsigned short create_stamp, unsigned short modify_stamp, unsigned short first, unsigned long length) {
     strcpy(fcbptr->filename, filename);
     fcbptr->attribute = attribute;
-    fcbptr->time = time;
-    fcbptr->date = date;
+    fcbptr->create_stamp = create_stamp;
+    fcbptr->modify_stamp = modify_stamp;
     fcbptr->first = first;
     fcbptr->length = length;
     fcbptr->free = 1;

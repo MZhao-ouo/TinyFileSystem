@@ -12,13 +12,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 typedef struct FCB{
     char filename[8];
     unsigned char attribute;        // 属性字段 0目录 1数据
     char free;      // 目录项是否为空 0空 1已分配
-    unsigned short time;
-    unsigned short date;
+    unsigned short create_stamp;
+    unsigned short modify_stamp;
     unsigned short first;       // 文件起始盘块号
     unsigned long length;       // 文件长度（字节数）
 }fcb;
@@ -30,8 +31,8 @@ typedef struct FAT{
 typedef struct USEROPEN{
     char filename[8];
     unsigned char attribute;        // 属性字段 0目录 1数据
-    unsigned short time;
-    unsigned short date;
+    unsigned short create_stamp;
+    unsigned short modify_stamp;
     unsigned short first;       // 文件起始盘块号
     unsigned long length;       // 文件长度（字节数）
     char dir[80];       // 打开文件所在的目录，以便快速检查文件是否已经打开
@@ -54,7 +55,7 @@ unsigned char *startp;  // 指向数据区的起始位置
 
 // utils.c
 int fill_useropen(int index, fcb *fcbptr, char *dir, int count, char fcbstate, char topenfile);
-int fill_fcb(fcb *fcbptr, char *filename, unsigned char attribute, unsigned short time, unsigned short date, unsigned short first, unsigned long length);
+int fill_fcb(fcb *fcbptr, char *filename, unsigned char attribute, unsigned short create_stamp, unsigned short modify_stamp, unsigned short first, unsigned long length);
 int allocate_fat(int num);
 int free_fat(int index);
 int find_fd();

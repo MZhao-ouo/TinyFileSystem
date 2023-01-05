@@ -1,7 +1,11 @@
 #include "my_fs.h"
 
+time_t init_time, current_time;
+
 /* 格式化磁盘，即初始化磁盘上的文件系统 */
 void my_format() {
+    init_time = time(NULL);
+
     memset(myvhard, 0, SIZE);   // 将虚拟磁盘清零
     block0 *b0 = (block0 *)myvhard; // 指向引导块
     strcpy(b0->information, "Disk Size:1024  Block Num:1000");
@@ -25,8 +29,9 @@ void my_format() {
     int start_fat = allocate_fat(2);
     memset(root, 0, BLOCK_SIZE * 2);
 
-    fill_fcb(&root[0], ".", 0, 0, 0, start_fat, BLOCK_SIZE);
-    fill_fcb(&root[1], "..", 0, 0, 0, start_fat, BLOCK_SIZE);
+    current_time = time(NULL);
+    fill_fcb(&root[0], ".", 0, current_time-init_time, 0, start_fat, BLOCK_SIZE);
+    fill_fcb(&root[1], "..", 0, current_time-init_time, 0, start_fat, BLOCK_SIZE);
 
     startp = b0->startblock;  // 指向数据区的起始位置，前面有一个引导块，两个FAT1，两个FAT2
     memset(openfilelist, 0, sizeof(openfilelist));   // 初始化用户打开文件表
@@ -71,7 +76,10 @@ void my_cd(char *dirname) {
             return;
         } else {
             strcpy(currentdir, openfilelist[curdir].dir);
-            fill_useropen(curdir, &curdirptr[1], currentdir, 0, 0, 1);
+            char tmp[80];
+            strcpy(tmp, currentdir);
+            tmp[strlen(tmp) - strlen(openfilelist[curdir].filename) - 1] = '\0';
+            fill_useropen(curdir, &curdirptr[1], tmp, 0, 0, 1);
         }
         return;
     }
@@ -112,7 +120,8 @@ void my_mkdir(char *dirname) {
 
     for (int i = 0; i < MAXFCB; i++) {
         if (curdirptr[i].free == 0) {
-            fill_fcb(&curdirptr[i], dirname, 0, 0, 0, start_fat, BLOCK_SIZE);
+            current_time = time(NULL);
+            fill_fcb(&curdirptr[i], dirname, 0, current_time-init_time, 0, start_fat, BLOCK_SIZE);
             flag = 1;
             break;
         }
@@ -124,8 +133,11 @@ void my_mkdir(char *dirname) {
     // 初始化新目录的FCB
     for(int i = 0; i < MAXFCB; i++)
         newdir[i].free = 0;
-    fill_fcb(&newdir[0], ".", 0, 0, 0, start_fat, BLOCK_SIZE);
-    fill_fcb(&newdir[1], "..", 0, 0, 0, openfilelist[curdir].first, BLOCK_SIZE);
+    fill_fcb(&newdir[0], ".", 0, current_time-init_time, 0, start_fat, BLOCK_SIZE);
+    fill_fcb(&newdir[1], "..", 0, current_time-init_time, 0, openfilelist[curdir].first, BLOCK_SIZE);
+
+    openfilelist[curdir].modify_stamp = time(NULL) - init_time;
+    openfilelist[curdir].fcbstate = 1;
 }
 
 void my_rmdir(char *dirname) {
@@ -144,6 +156,8 @@ void my_rmdir(char *dirname) {
                 }
                 curdirptr[i].free = 0;
                 free_fat(curdirptr[i].first);
+                openfilelist[curdir].modify_stamp = time(NULL) - init_time;
+                openfilelist[curdir].fcbstate = 1;
             } else {
                 printf("It is not a directory!\n");
             }
@@ -158,14 +172,21 @@ void my_ls() {
     fcb *curdirptr = (fcb *)(myvhard + BLOCK_SIZE * openfilelist[curdir].first);
     char attribute[80];
 
-    printf("Name\tAttri\tTime\tDate\tSize\n");
+    printf("Name\tAttri\tcTime\t\t\tmTime\t\t\tSize\n");
     for (int i = 0; i < MAXFCB; i++) {
         if (curdirptr[i].free == 1) {
             if (curdirptr[i].attribute == 0)
                 strcpy(attribute, "Dir");
             else
                 strcpy(attribute, "File");
-            printf("%s\t%s\t%d\t%d\t%d\n", curdirptr[i].filename, attribute, curdirptr[i].time, curdirptr[i].date, curdirptr[i].length);
+            time_t ctimecal_ptr = curdirptr[i].create_stamp + init_time;
+            struct tm *ctr = localtime(&ctimecal_ptr);
+            time_t mtimecal_ptr = curdirptr[i].modify_stamp + init_time;
+            struct tm *mtr = localtime(&mtimecal_ptr);
+            printf("%s\t%s\t", curdirptr[i].filename, attribute);
+            printf("%d-%d-%d %d:%d:%d\t", (1900+ctr->tm_year), (1+ctr->tm_mon), ctr->tm_mday, ctr->tm_hour, ctr->tm_min, ctr->tm_sec);
+            printf("%d-%d-%d %d:%d:%d\t", (1900+mtr->tm_year), (1+mtr->tm_mon), mtr->tm_mday, mtr->tm_hour, mtr->tm_min, mtr->tm_sec);
+            printf("%dB\n", curdirptr[i].length);
         }
     }
 }
@@ -189,7 +210,8 @@ void my_create(char *filename) {
     int index = 0;
     for (index = 0; index < MAXFCB; index++) {
         if (curdirptr[index].free == 0) {
-            fill_fcb(&curdirptr[index], filename, 1, 0, 0, start_fat, BLOCK_SIZE);
+            current_time = time(NULL);
+            fill_fcb(&curdirptr[index], filename, 1, current_time-init_time, 0, start_fat, BLOCK_SIZE);
             flag = 1;
             break;
         }
@@ -201,6 +223,8 @@ void my_create(char *filename) {
     memset((void *)newblock, 0, BLOCK_SIZE);
 
     my_open(filename);
+    openfilelist[curdir].modify_stamp = time(NULL) - init_time;
+    openfilelist[curdir].fcbstate = 1;
 }
 
 void my_rm(char *filename) {
@@ -217,6 +241,8 @@ void my_rm(char *filename) {
                 }
                 curdirptr[i].free = 0;
                 free_fat(curdirptr[i].first);
+                openfilelist[curdir].modify_stamp = time(NULL) - init_time;
+                openfilelist[curdir].fcbstate = 1;
             } else {
                 printf("It is not a file!\n");
             }
@@ -272,7 +298,7 @@ void my_close(int fd) {
         fcb *parentdir = (fcb *)(myvhard + BLOCK_SIZE * block);
         for (int i = 0; i < MAXFCB; i++) {
             if (strcmp(parentdir[i].filename, openfilelist[fd].filename) == 0) {
-                fill_fcb(&parentdir[i], openfilelist[fd].filename, openfilelist[fd].attribute, openfilelist[fd].time, openfilelist[fd].date, openfilelist[fd].first, openfilelist[fd].length);
+                fill_fcb(&parentdir[i], openfilelist[fd].filename, openfilelist[fd].attribute, openfilelist[fd].create_stamp, openfilelist[fd].modify_stamp, openfilelist[fd].first, openfilelist[fd].length);
             }
         }
     }
@@ -282,7 +308,6 @@ void my_close(int fd) {
 }
 
 int  my_write(int fd) {
-    printf("writing file...\n");
     if (fd < 0 || fd >= MAXOPENFILE) {
         printf("fd is illegal !\n");
         return -1;
@@ -330,6 +355,7 @@ int  my_write(int fd) {
     
     do_write(fd, text, strlen(text) + 1, wstyle);
     openfilelist[fd].fcbstate = 1;
+    openfilelist[fd].modify_stamp = time(NULL) - init_time;
     return 1;
 }
 int  do_write(int fd, char* text, int len, char wstyle) {

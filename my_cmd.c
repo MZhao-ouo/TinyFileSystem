@@ -158,11 +158,11 @@ void my_ls() {
     fcb *curdirptr = (fcb *)(myvhard + BLOCK_SIZE * openfilelist[curdir].first);
     char attribute[80];
 
-    printf("Name\tAttribute\tTime\tDate\tSize\n");
+    printf("Name\tAttri\tTime\tDate\tSize\n");
     for (int i = 0; i < MAXFCB; i++) {
         if (curdirptr[i].free == 1) {
             if (curdirptr[i].attribute == 0)
-                strcpy(attribute, "Directory");
+                strcpy(attribute, "Dir");
             else
                 strcpy(attribute, "File");
             printf("%s\t%s\t%d\t%d\t%d\n", curdirptr[i].filename, attribute, curdirptr[i].time, curdirptr[i].date, curdirptr[i].length);

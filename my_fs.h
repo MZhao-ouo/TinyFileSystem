@@ -57,6 +57,8 @@ int fill_useropen(int index, fcb *fcbptr, char *dir, int count, char fcbstate, c
 int fill_fcb(fcb *fcbptr, char *filename, unsigned char attribute, unsigned short time, unsigned short date, unsigned short first, unsigned long length);
 int allocate_fat(int num);
 int free_fat(int index);
+int find_fd();
+int get_dir_block(char *full_dir);
 
 // my_func.c
 void my_format();

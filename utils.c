@@ -74,3 +74,29 @@ int free_fat(int index) {
 
     return 1;
 }
+
+int find_fd() {
+    for (int i = 2; i < MAXOPENFILE; i++) {
+        if (openfilelist[i].topenfile == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+int get_dir_block(char *full_dir) {
+    fcb *dir_fcb_p = (fcb *)startp;
+    char *token;
+
+    token = strtok(full_dir, "/");
+    while(token != NULL) {
+        for (int i = 0; i < MAXFCB; i++) {
+            if (strcmp(dir_fcb_p[i].filename, token) == 0 && dir_fcb_p[i].attribute == 0) {
+                dir_fcb_p = (fcb *)(myvhard + dir_fcb_p[i].first * BLOCK_SIZE);
+            }
+        }
+        token = strtok(NULL, "/");
+    }
+
+    return dir_fcb_p[0].first;
+}

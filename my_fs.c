@@ -28,9 +28,10 @@ void startsys() {
     printf("File system ready!\n");
 }
 
-int main(int argc, char *argv[]) {
+int main() {
     char full_input[80];
-    char *token[3];
+    char *token[10];
+    int i;
 
     startsys();     // 调用startsys()函数将磁盘文件映射到虚拟磁盘中
     printf("Welcome to use my file system!\n");
@@ -39,8 +40,9 @@ int main(int argc, char *argv[]) {
         printf("%s > $ ", currentdir);
         fgets(full_input, 80, stdin);
         full_input[strlen(full_input) - 1] = '\0';
+        // printf("full_input: %s\n", full_input);
 
-        int i = 0;
+        i = 0;
         token[i] = strtok(full_input, " ");
         while (token[i] != NULL) {
             i++;
@@ -66,11 +68,14 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(token[0], "open") == 0 && i == 2) {
             my_open(token[1]);
         } else if (strcmp(token[0], "close") == 0 && i == 2) {
-            my_close(token[1]);
+            my_close( atoi(token[1]) );
         } else if (strcmp(token[0], "write") == 0 && i == 2) {
-            my_write(token[1]);
-        } else if (strcmp(token[0], "read") == 0 && i == 3) {
-            my_read(token[1], token[2]);
+            my_write( atoi(token[1]) );
+        } else if (strcmp(token[0], "read") == 0) {
+            if ( i == 3 )
+                my_read( atoi(token[1]), atoi(token[2]) );
+            else
+                printf("Arguments ERROR! now num:%d\n", i);
         } else if (strcmp(token[0], "exitsys") == 0 && i == 1) {
             my_exitsys();
         } else {

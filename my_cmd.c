@@ -199,36 +199,321 @@ void my_create(char *filename) {
         return;
     }
     memset((void *)newblock, 0, BLOCK_SIZE);
-    fill_useropen(curdir+1, &curdirptr[index], currentdir, 0, 0, 1);
 
+    my_open(filename);
 }
 
 void my_rm(char *filename) {
+    fcb *curdirptr = (fcb *)(myvhard + BLOCK_SIZE * openfilelist[curdir].first);
 
+    for (int i = 0; i < MAXFCB; i++) {
+        if (strcmp(curdirptr[i].filename, filename) == 0 && curdirptr[i].free == 1) {
+            if (curdirptr[i].attribute == 1) {
+                for (int j = 0; j < MAXOPENFILE; j++) {
+                    if (strcmp(openfilelist[j].filename, filename) == 0 && strcmp(openfilelist[j].dir, currentdir) == 0 && openfilelist[j].topenfile == 1) {
+                        printf("File is opened!\n");
+                        return;
+                    }
+                }
+                curdirptr[i].free = 0;
+                free_fat(curdirptr[i].first);
+            } else {
+                printf("It is not a file!\n");
+            }
+            return;
+        }
+    }
+
+    printf("File not found!\n");
 }
 
 void my_open(char *filename) {
+    fcb *curdirptr = (fcb *)(myvhard + BLOCK_SIZE * openfilelist[curdir].first);
 
+    for (int i = 0; i < MAXFCB; i++) {
+        if (strcmp(curdirptr[i].filename, filename) == 0 && curdirptr[i].free == 1) {
+            if (curdirptr[i].attribute == 1) {
+                for (int j = 0; j < MAXOPENFILE; j++) {
+                    if (strcmp(openfilelist[j].filename, filename) == 0 && strcmp(openfilelist[j].dir, currentdir) == 0 && openfilelist[j].topenfile == 1) {
+                        printf("File has opened!\n");
+                        return;
+                    }
+                }
+                int newfile_fd = find_fd();
+                if (newfile_fd == -1) {
+                    printf("Open file list is full!Open error\n");
+                    return;
+                }
+                fill_useropen(newfile_fd, &curdirptr[i], currentdir, 0, 0, 1);
+                printf("File \"%s\" open success!fd is %d\n", filename, newfile_fd);
+                return;
+            } else {
+                printf("It is not a file!\n");
+                return;
+            }
+        }
+    }
+    printf("File not found!\n");
 }
 
 void my_close(int fd) {
+    if (fd < 0 || fd >= MAXOPENFILE) {
+        printf("fd is illegal!\n");
+        return;
+    }
+    if (openfilelist[fd].topenfile == 0) {
+        printf("File is not opened!\n");
+        return;
+    }
 
+    if (openfilelist[fd].fcbstate == 1) {
+        // 找出其父目录的磁盘
+        int block = get_dir_block(openfilelist[fd].dir);
+        fcb *parentdir = (fcb *)(myvhard + BLOCK_SIZE * block);
+        for (int i = 0; i < MAXFCB; i++) {
+            if (strcmp(parentdir[i].filename, openfilelist[fd].filename) == 0) {
+                fill_fcb(&parentdir[i], openfilelist[fd].filename, openfilelist[fd].attribute, openfilelist[fd].time, openfilelist[fd].date, openfilelist[fd].first, openfilelist[fd].length);
+            }
+        }
+    }
+
+    openfilelist[fd].topenfile = 0;
+    printf("File \"%s\" close success!\n", openfilelist[fd].filename);
 }
 
-int my_write(int fd) {
+int  my_write(int fd) {
+    printf("writing file...\n");
+    if (fd < 0 || fd >= MAXOPENFILE) {
+        printf("fd is illegal !\n");
+        return -1;
+    }
+    int wstyle;
+    while (1) {
+        printf("Input: 0=truncate write, 1=overwrite write, 2=append write\n");
+        scanf("%d", &wstyle);
+        if (wstyle > 2 || wstyle < 0) {
+            printf("Command error!\n");
+        }
+        else {
+            break;
+        }
+    }
+    char text[MAX_TEXT_SIZE] = "\0";
+    char textTmp[MAX_TEXT_SIZE] = "\0";
+    char Tmp[MAX_TEXT_SIZE] = "\0";
+    char Tmp2[4] = "\0";
 
+    printf("Please enter the file data, and end the file with END\n");
+    getchar();
+    while (fgets(Tmp, 100, stdin)) {
+        for (int i = 0; i < strlen(Tmp) - 1; i++)
+        {
+            textTmp[i] = Tmp[i];
+            textTmp[i + 1] = '\0';
+        }
+        if (strlen(Tmp) >= 3) 
+        {
+            Tmp2[0] = Tmp[strlen(Tmp) - 4];
+            Tmp2[1] = Tmp[strlen(Tmp) - 3];
+            Tmp2[2] = Tmp[strlen(Tmp) - 2];
+            Tmp2[3] = '\0';
+        }
+        if (strcmp(textTmp, "END") == 0 || strcmp(Tmp2, "END") == 0)
+        {
+            break;
+        }
+        textTmp[strlen(textTmp)] = '\n';
+        strcat(text, textTmp);
+
+    }
+    text[strlen(text)] = '\0';
+    
+    do_write(fd, text, strlen(text) + 1, wstyle);
+    openfilelist[fd].fcbstate = 1;
+    return 1;
 }
-
 int  do_write(int fd, char* text, int len, char wstyle) {
+    int blockNum = openfilelist[fd].first;
+    fat* fatPtr = (fat*)(myvhard + BLOCK_SIZE) + blockNum;
 
-}
+    fat* fat1 = (fat*)(myvhard + BLOCK_SIZE);
+    if (wstyle == 0) {
+        openfilelist[fd].count = 0;
+        openfilelist[fd].length = 0;
+    }
+    else if (wstyle == 1) {
+        if (openfilelist[fd].attribute == 1 && openfilelist[fd].length != 0) {
+            openfilelist[fd].count -= 1;
+        }
+    }
+    else if (wstyle == 2) {
+        if (openfilelist[fd].attribute == 0) {
+            openfilelist[fd].count = openfilelist[fd].length;
+        }
+        else if (openfilelist[fd].attribute == 1 && openfilelist[fd].length != 0) {
+            openfilelist[fd].count = openfilelist[fd].length - 1;
+        }
+    }
 
-int  my_read(int fd, int len) {
+
+    int off = openfilelist[fd].count;
+
+    while (off >= BLOCK_SIZE) {
+        blockNum = fatPtr->id;
+        if (blockNum == END) {
+            blockNum = allocate_fat(1);
+            if (blockNum == END) {
+                printf("Insufficient disc blocks!\n");
+                return -1;
+            }
+            else {
+                //update FAT
+                fatPtr->id = blockNum;
+                fatPtr = (fat*)(myvhard + BLOCK_SIZE + blockNum);
+                fatPtr->id = END;
+            }
+        }
+        fatPtr = (fat*)(myvhard + BLOCK_SIZE) + blockNum;
+        off -= BLOCK_SIZE;
+    }
+
+    unsigned char* buf = (unsigned char*)malloc(BLOCK_SIZE * sizeof(unsigned char));
+    if (buf == NULL) {
+        printf("Failed to request memory space!\n");
+        return -1;
+    }
+
+
+    fcb* dBlock = (fcb*)(myvhard + BLOCK_SIZE * blockNum);
+    fcb* dFcb = (fcb*)(text);
+    unsigned char* blockPtr = (unsigned char*)(myvhard + BLOCK_SIZE * blockNum);				
+    int lenTmp = 0;
+    char* textPtr = text;
+    fcb* dFcbBuf = (fcb*)(buf);
+
+    while (len > lenTmp) {
+        memcpy(buf, blockPtr, BLOCK_SIZE);
+        for (; off < BLOCK_SIZE; off++) {
+            *(buf + off) = *textPtr;
+            textPtr++;
+            lenTmp++;
+            if (len == lenTmp) {
+                break;
+            }
+        }
+        memcpy(blockPtr, buf, BLOCK_SIZE);
+
+        if (off == BLOCK_SIZE && len != lenTmp) {
+            off = 0;
+            blockNum = fatPtr->id;
+            if (blockNum == END) {
+                blockNum = allocate_fat(1);
+                if (blockNum == END) {
+                    printf("Run out of disc blocks!\n");
+                    return -1;
+                }
+                else {
+                    blockPtr = (unsigned char*)(myvhard + BLOCK_SIZE * blockNum);
+                    fatPtr->id = blockNum;
+                    fatPtr = (fat*)(myvhard + BLOCK_SIZE) + blockNum;
+                    fatPtr->id = END;
+                }
+            }
+            else {
+                blockPtr = (unsigned char*)(myvhard + BLOCK_SIZE * blockNum);
+                fatPtr = (fat*)(myvhard + BLOCK_SIZE) + blockNum;
+            }
+        }
+    }
+    openfilelist[fd].count += len;
+
+    if (openfilelist[fd].count > openfilelist[fd].length)
+        openfilelist[fd].length = openfilelist[fd].count;
+    free(buf);
+    int i = blockNum;
+    while (1) {
+        if (fat1[i].id != END) {
+            int next = fat1[i].id;
+            fat1[i].id = FREE;
+            i = next;
+        }
+        else {
+            break;
+        }
+    }
+    fat1[blockNum].id = END;
+    memcpy((fat*)(myvhard + BLOCK_SIZE * 3), (fat*)(myvhard + BLOCK_SIZE), 2 * BLOCK_SIZE);
+    return len;
 
 }
 
 int  do_read(int fd, int len, char* text) {
+    int lenTmp = len;
+    unsigned char* buf = (unsigned char*)malloc(1024);
+    if (buf == NULL) {
+        printf("do_read failed to request memory space\n");
+        return -1;
+    }
 
+    int off = openfilelist[fd].count;
+    int blockNum = openfilelist[fd].first;
+    fat* fatPtr = (fat*)(myvhard + BLOCK_SIZE) + blockNum;
+    while (off >= BLOCK_SIZE) {
+        off -= BLOCK_SIZE;
+        blockNum = fatPtr->id;
+        if (blockNum == END) {
+            printf("The block sought by do_read does not exist\n");
+            return -1;
+        }
+        fatPtr = (fat*)(myvhard + BLOCK_SIZE) + blockNum;
+    }
+    unsigned char* blockPtr = myvhard + BLOCK_SIZE * blockNum;
+    memcpy(buf, blockPtr, BLOCK_SIZE);
+    char* textPtr = text;
+    fcb* debug = (fcb*)text;
+    while (len > 0) {
+        if (BLOCK_SIZE - off > len) {
+            memcpy(textPtr, buf + off, len);
+            textPtr += len;
+            off += len;
+            openfilelist[fd].count += len;
+            len = 0;
+        }
+        else {
+            memcpy(textPtr, buf + off, BLOCK_SIZE - off);
+            textPtr += BLOCK_SIZE - off;
+            off = 0;
+            len -= BLOCK_SIZE - off;
+            blockNum = fatPtr->id;
+            if (blockNum == END) {
+                printf( "The len length is too long, exceeds the file size!\n");
+                break;
+            }
+            fatPtr = (fat*)(myvhard + BLOCK_SIZE) + blockNum;
+            blockPtr = myvhard + BLOCK_SIZE * blockNum;
+            memcpy(buf, blockPtr, BLOCK_SIZE);
+        }
+    }
+    free(buf);
+    return lenTmp - len;
+}
+
+int  my_read(int fd, int len) {
+    if (fd >= MAXOPENFILE || fd < 0) {
+        printf("File does not exist\n");
+        return -1;
+    }
+    openfilelist[fd].count = 0;
+    char text[MAX_TEXT_SIZE] = "\0";
+
+    if (len > openfilelist[fd].length)
+    {
+        printf("The read length has exceeded the file size and the default is to read to the end of the file.\n");
+        len = openfilelist[fd].length;
+    }
+    do_read(fd, len, text);
+    puts(text);
+    return 1;
 }
 
 void my_exitsys() {
